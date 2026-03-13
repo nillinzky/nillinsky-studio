@@ -744,24 +744,37 @@ async function uploadPiecePhotos(input) {
     if (upErr) { toast('Upload failed: ' + upErr.message); continue; }
 
     const { data: urlData } = db.storage.from('piece-photos').getPublicUrl(path);
+    const publicUrl = urlData.publicUrl;
 
-    const { error: dbErr } = await db.from('piece_photos').insert({
+    const { data: inserted, error: dbErr } = await db.from('piece_photos').insert({
       piece_id: currentPiece.id,
       storage_path: path,
-      public_url: urlData.publicUrl,
+      public_url: publicUrl,
       sort_order: currentPhotos.length
-    });
+    }).select().single();
     if (dbErr) { toast('DB error: ' + dbErr.message); continue; }
+
+    // Push immediately so lightbox updates without waiting for reload
+    const newPhoto = inserted || { piece_id: currentPiece.id, storage_path: path, public_url: publicUrl };
+    currentPhotos.push(newPhoto);
+    currentPhotoIndex = currentPhotos.length - 1;
+    updateLightbox();
   }
 
   input.value = '';
-  await loadPieces();
-  currentPiece = pieces.find(p => p.id === currentPiece.id);
-  currentPhotos = currentPiece?.piece_photos || [];
-  currentPhotoIndex = currentPhotos.length - 1;
-  updateLightbox();
-  setStatus(`${pieces.length} pieces · ${treatments.length} tests`);
   toast('Photo uploaded');
+
+  // Background reload to sync grid card and piece state
+  await loadPieces();
+  const refreshed = pieces.find(p => p.id === currentPiece.id);
+  if (refreshed) {
+    currentPiece = refreshed;
+    currentPhotos = refreshed.piece_photos || [];
+    // keep showing the last uploaded photo
+    currentPhotoIndex = Math.max(0, currentPhotos.length - 1);
+    updateLightbox();
+  }
+  setStatus(`${pieces.length} pieces · ${treatments.length} tests`);
 }
 
 async function deleteLbPhoto() {
