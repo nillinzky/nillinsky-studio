@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NILLINSKY — Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0e0d0b;
+    --surface: #161512;
+    --border: #2a2720;
+    --text: #e8e0d0;
+    --muted: #6b6358;
+    --accent: #c9a96e;
+    --accent-dim: #7a6340;
+    --danger: #8b3a3a;
+    --white: #f5f0e8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Cormorant Garamond', serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 40px;
+    background: linear-gradient(to bottom, var(--bg) 60%, transparent);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(8px);
+  }
+
+  .logo {
+    font-family: 'Courier Prime', monospace;
+    font-size: 13px;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  nav { display: flex; gap: 8px; }
+
+  nav button {
+    background: none; border: 1px solid transparent;
+    color: var(--muted); font-family: 'Courier Prime', monospace;
+    font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+    padding: 6px 14px; cursor: pointer; transition: all 0.2s;
+  }
+  nav button:hover, nav button.active {
+    color: var(--accent); border-color: var(--accent-dim);
+  }
+
+  .header-right { display: flex; align-items: center; gap: 16px; }
+
+  .add-btn {
+    background: var(--accent); color: var(--bg);
+    border: none; font-family: 'Courier Prime', monospace;
+    font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+    padding: 8px 18px; cursor: pointer; transition: opacity 0.2s;
+  }
+  .add-btn:hover { opacity: 0.8; }
+
+  main { padding: 100px 40px 60px; }
+
+  .status-bar {
+    font-family: 'Courier Prime', monospace;
+    font-size: 11px; color: var(--muted);
+    letter-spacing: 0.1em; margin-bottom: 40px;
+    display: flex; align-items: center; gap: 24px;
+  }
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); display: inline-block;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 2px;
+  }
+
+  .card {
+    position: relative; overflow: hidden;
+    aspect-ratio: 3/4; cursor: pointer;
+    background: var(--surface);
+    transition: transform 0.3s ease;
+  }
+  .card:hover { transform: scale(1.01); z-index: 2; }
+  .card:hover .card-overlay { opacity: 1; }
+
+  .card img {
+    width: 100%; height: 100%;
+    object-fit: cover; display: block;
+    transition: transform 0.4s ease;
+  }
+  .card:hover img { transform: scale(1.04); }
+
+  .card-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(14,13,11,0.95) 0%, transparent 50%);
+    opacity: 0; transition: opacity 0.3s;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 24px;
+  }
+
+  .card-name {
+    font-size: 22px; font-weight: 300; font-style: italic;
+    color: var(--white); margin-bottom: 4px;
+  }
+  .card-meta {
+    font-family: 'Courier Prime', monospace;
+    font-size: 10px; letter-spacing: 0.15em;
+    text-transform: uppercase; color: var(--accent);
+  }
+
+  .card-no-photo {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 8px;
+    color: var(--muted);
+    border: 1px dashed var(--border);
+  }
+  .card-no-photo span { font-family: 'Courier Prime', monospace; font-size: 11px; letter-spacing: 0.1em; }
+
+  .empty {
+    text-align: center; padding: 120px 40px;
+    color: var(--muted);
+  }
+  .empty h2 { font-size: 32px; font-weight: 300; font-style: italic; margin-bottom: 12px; }
+  .empty p { font-family: 'Courier Prime', monospace; font-size: 12px; letter-spacing: 0.1em; }
+
+  .lightbox {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(14,13,11,0.97);
+    display: none; flex-direction: column;
+    animation: fadeIn 0.2s ease;
+  }
+  .lightbox.open { display: flex; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+  .lightbox-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 40px; border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .lightbox-title { font-size: 28px; font-style: italic; font-weight: 300; }
+  .lightbox-stage {
+    font-family: 'Courier Prime', monospace;
+    font-size: 10px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--accent);
+    margin-top: 4px;
+  }
+
+  .lightbox-controls { display: flex; gap: 12px; align-items: center; }
+
+  .lb-btn {
+    background: none; border: 1px solid var(--border);
+    color: var(--muted); font-family: 'Courier Prime', monospace;
+    font-size: 18px; width: 40px; height: 40px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+  .lb-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .lb-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+  .lightbox-body { flex: 1; display: flex; overflow: hidden; }
+
+  .lightbox-image {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 40px; position: relative;
+  }
+
+  .lightbox-image img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+  .lb-arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    background: none; border: 1px solid var(--border);
+    color: var(--muted); font-size: 20px;
+    width: 48px; height: 48px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+  .lb-arrow:hover { border-color: var(--accent); color: var(--accent); }
+  .lb-arrow.prev { left: 16px; }
+  .lb-arrow.next { right: 16px; }
+
+  .lightbox-sidebar {
+    width: 300px; border-left: 1px solid var(--border);
+    overflow-y: auto; padding: 32px 24px;
+    flex-shrink: 0;
+  }
+
+  .sidebar-section { margin-bottom: 32px; }
+  .sidebar-label {
+    font-family: 'Courier Prime', monospace;
+    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+  .sidebar-value { font-size: 18px; font-weight: 300; }
+
+  .filmstrip { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .filmstrip-thumb {
+    width: 56px; height: 56px; object-fit: cover;
+    cursor: pointer; opacity: 0.5; transition: opacity 0.2s;
+    border: 1px solid transparent;
+  }
+  .filmstrip-thumb.active, .filmstrip-thumb:hover { opacity: 1; border-color: var(--accent); }
+
+  .upload-zone {
+    border: 1px dashed var(--border); padding: 16px;
+    text-align: center; cursor: pointer; transition: border-color 0.2s;
+    margin-top: 8px;
+  }
+  .upload-zone:hover { border-color: var(--accent-dim); }
+  .upload-zone input { display: none; }
+  .upload-zone p {
+    font-family: 'Courier Prime', monospace;
+    font-size: 11px; color: var(--muted); letter-spacing: 0.08em;
+  }
+
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(14,13,11,0.92);
+    display: none; align-items: center; justify-content: center;
+    animation: fadeIn 0.2s ease;
+  }
+  .modal-backdrop.open { display: flex; }
+
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    width: 560px; max-width: 95vw; max-height: 90vh;
+    overflow-y: auto; padding: 40px;
+  }
+
+  .modal h2 {
+    font-size: 28px; font-style: italic; font-weight: 300;
+    margin-bottom: 32px;
+  }
+
+  .field { margin-bottom: 20px; }
+  .field label {
+    display: block; font-family: 'Courier Prime', monospace;
+    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+  .field input, .field select, .field textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); font-family: 'Cormorant Garamond', serif;
+    font-size: 17px; padding: 10px 14px;
+    outline: none; transition: border-color 0.2s;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent-dim); }
+  .field select option { background: var(--surface); }
+  .field textarea { resize: vertical; min-height: 80px; }
+
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .modal-actions { display: flex; gap: 12px; margin-top: 32px; justify-content: flex-end; }
+
+  .btn-primary {
+    background: var(--accent); color: var(--bg);
+    border: none; font-family: 'Courier Prime', monospace;
+    font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+    padding: 12px 24px; cursor: pointer; transition: opacity 0.2s;
+  }
+  .btn-primary:hover { opacity: 0.8; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-secondary {
+    background: none; color: var(--muted);
+    border: 1px solid var(--border); font-family: 'Courier Prime', monospace;
+    font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+    padding: 12px 24px; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--muted); color: var(--text); }
+
+  .tab-section { display: none; }
+  .tab-section.active { display: block; }
+
+  .treatment-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 2px;
+  }
+
+  .treatment-card {
+    background: var(--surface); border: 1px solid var(--border);
+    cursor: pointer; transition: border-color 0.2s;
+    overflow: hidden;
+  }
+  .treatment-card:hover { border-color: var(--accent-dim); }
+
+  .treatment-card-img {
+    width: 100%; aspect-ratio: 4/3; object-fit: cover;
+    display: block;
+  }
+  .treatment-card-img.placeholder {
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--border); font-size: 32px;
+  }
+
+  .treatment-card-body { padding: 16px; }
+  .treatment-name { font-size: 19px; font-style: italic; margin-bottom: 4px; }
+  .treatment-material {
+    font-family: 'Courier Prime', monospace;
+    font-size: 10px; letter-spacing: 0.15em; color: var(--accent);
+    text-transform: uppercase;
+  }
+  .rating { margin-top: 8px; color: var(--accent-dim); font-size: 14px; }
+  .rating .filled { color: var(--accent); }
+
+  .toast {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    background: var(--surface); border: 1px solid var(--accent-dim);
+    color: var(--text); font-family: 'Courier Prime', monospace;
+    font-size: 12px; letter-spacing: 0.1em;
+    padding: 12px 24px; z-index: 999;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  .loading {
+    display: flex; align-items: center; justify-content: center;
+    padding: 80px; color: var(--muted);
+    font-family: 'Courier Prime', monospace; font-size: 12px;
+    letter-spacing: 0.2em;
+  }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+
+  @media (max-width: 640px) {
+    header { padding: 16px 20px; }
+    main { padding: 90px 16px 60px; }
+    .lightbox-sidebar { display: none; }
+    .grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Nillinsky — Studio</div>
+  <nav>
+    <button class="active" onclick="switchTab('pieces', this)">Pieces</button>
+    <button onclick="switchTab('treatments', this)">Material Lab</button>
+  </nav>
+  <div class="header-right">
+    <button class="add-btn" id="addBtn" onclick="openAddModal()">+ Add</button>
+  </div>
+</header>
+
+<main>
+  <div class="status-bar">
+    <span class="status-dot"></span>
+    <span id="statusText">Connecting…</span>
+  </div>
+
+  <div id="tab-pieces" class="tab-section active">
+    <div id="piecesGrid" class="grid">
+      <div class="loading">Loading pieces…</div>
+    </div>
+  </div>
+
+  <div id="tab-treatments" class="tab-section">
+    <div id="treatmentsGrid" class="treatment-grid">
+      <div class="loading">Loading tests…</div>
+    </div>
+  </div>
+</main>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-header">
+    <div>
+      <div class="lightbox-title" id="lbTitle"></div>
+      <div class="lightbox-stage" id="lbStage"></div>
+    </div>
+    <div class="lightbox-controls">
+      <button class="lb-btn" title="Upload photo" onclick="triggerLbUpload()">↑</button>
+      <button class="lb-btn danger" title="Delete photo" onclick="deleteLbPhoto()">✕</button>
+      <button class="lb-btn" onclick="closeLightbox()">✕ Close</button>
+    </div>
+  </div>
+  <div class="lightbox-body">
+    <div class="lightbox-image">
+      <button class="lb-arrow prev" onclick="lbNav(-1)">‹</button>
+      <img id="lbMainImg" src="" alt="">
+      <button class="lb-arrow next" onclick="lbNav(1)">›</button>
+    </div>
+    <div class="lightbox-sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Collection</div>
+        <div class="sidebar-value" id="lbCollection">—</div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Dimensions</div>
+        <div class="sidebar-value" id="lbDimensions">—</div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Edition</div>
+        <div class="sidebar-value" id="lbEdition">—</div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Notes</div>
+        <div class="sidebar-value" style="font-size:15px" id="lbNotes">—</div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Photos</div>
+        <div class="filmstrip" id="lbFilmstrip"></div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Upload photo</div>
+        <div class="upload-zone" onclick="triggerLbUpload()">
+          <input type="file" id="lbFileInput" accept="image/*" multiple onchange="uploadPiecePhotos(this)">
+          <p>Click to upload<br>or drag & drop</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD PIECE MODAL -->
+<div class="modal-backdrop" id="addPieceModal">
+  <div class="modal">
+    <h2 id="modalTitle">Add Piece</h2>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="newName" placeholder="e.g. Engineer">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Status</label>
+        <select id="newStatus">
+          <option>Previz</option>
+          <option>Pose Review</option>
+          <option>Treatment</option>
+          <option>Digital</option>
+          <option>Print Ready</option>
+          <option>Mold</option>
+          <option>Cast</option>
+          <option>Finish</option>
+          <option>Final</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Collection</label>
+        <!-- FIX: dropdown loaded from Supabase — saves collection_id (uuid), not text -->
+        <select id="newCollection">
+          <option value="">— none —</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Dimensions</label>
+        <input type="text" id="newDimensions" placeholder="e.g. 30×12×10 cm">
+      </div>
+      <div class="field">
+        <label>Edition Size</label>
+        <input type="number" id="newEdition" placeholder="e.g. 5">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Pose Count</label>
+        <input type="number" id="newPoseCount">
+      </div>
+      <div class="field">
+        <label>Wall Order</label>
+        <input type="number" id="newWallOrder">
+      </div>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="newNotes" placeholder="Any notes…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('addPieceModal')">Cancel</button>
+      <button class="btn-primary" id="savePieceBtn" onclick="savePiece()">Save Piece</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD TREATMENT MODAL -->
+<div class="modal-backdrop" id="addTreatmentModal">
+  <div class="modal">
+    <h2>Add Treatment Test</h2>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="tName" placeholder="e.g. Black oxide patina #3">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Material</label>
+        <input type="text" id="tMaterial" placeholder="e.g. Resin + iron powder">
+      </div>
+      <div class="field">
+        <label>Rating (1–5)</label>
+        <input type="number" id="tRating" min="1" max="5">
+      </div>
+    </div>
+    <div class="field">
+      <label>Process</label>
+      <textarea id="tProcess" placeholder="Steps taken…"></textarea>
+    </div>
+    <div class="field">
+      <label>Result</label>
+      <textarea id="tResult" placeholder="What happened…"></textarea>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="tNotes"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('addTreatmentModal')">Cancel</button>
+      <button class="btn-primary" id="saveTreatmentBtn" onclick="saveTreatment()">Save Test</button>
+    </div>
+  </div>
+</div>
+
+<!-- TREATMENT LIGHTBOX -->
+<div class="modal-backdrop" id="treatmentLightbox" style="z-index:250">
+  <div class="modal" style="width:700px;max-width:95vw">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+      <div>
+        <h2 id="tlbName" style="margin-bottom:4px"></h2>
+        <div class="treatment-material" id="tlbMaterial"></div>
+      </div>
+      <button class="lb-btn" onclick="closeModal('treatmentLightbox')">✕</button>
+    </div>
+    <div id="tlbPhotoArea" style="margin-bottom:24px;text-align:center;min-height:200px;display:flex;align-items:center;justify-content:center">
+      <img id="tlbMainImg" src="" style="max-width:100%;max-height:360px;object-fit:contain;display:none">
+      <span id="tlbNoPhoto" style="color:var(--muted);font-family:'Courier Prime',monospace;font-size:12px">No photos yet</span>
+    </div>
+    <div class="filmstrip" id="tlbFilmstrip" style="margin-bottom:24px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+      <div>
+        <div class="sidebar-label">Process</div>
+        <div id="tlbProcess" style="font-size:16px;margin-top:4px"></div>
+      </div>
+      <div>
+        <div class="sidebar-label">Result</div>
+        <div id="tlbResult" style="font-size:16px;margin-top:4px"></div>
+      </div>
+    </div>
+    <div style="margin-bottom:24px">
+      <div class="sidebar-label">Notes</div>
+      <div id="tlbNotes" style="font-size:16px;margin-top:4px"></div>
+    </div>
+    <div class="upload-zone" onclick="triggerTlbUpload()">
+      <input type="file" id="tlbFileInput" accept="image/*" multiple onchange="uploadTreatmentPhotos(this)">
+      <p>Upload photos to this test</p>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://twxcmkubtidiqiigaxhk.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Ua5hG8ZuC6KIvqrk79RNhQ_V1cjdwUa';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let pieces = [];
+let treatments = [];
+let collections = [];
+let currentPiece = null;
+let currentPhotoIndex = 0;
+let currentPhotos = [];
+let currentTab = 'pieces';
+let currentTreatment = null;
+let currentTreatmentPhotos = [];
+let currentTlbIndex = 0;
+
+async function init() {
+  setStatus('Loading…');
+  await Promise.all([loadCollections(), loadPieces(), loadTreatments()]);
+  setStatus(`${pieces.length} pieces · ${treatments.length} tests`);
+}
+
+function setStatus(msg) {
+  document.getElementById('statusText').textContent = msg;
+}
+
+// ── FIX: load real collections from Supabase and populate dropdown ──
+async function loadCollections() {
+  const { data, error } = await db
+    .from('collections')
+    .select('id, name')
+    .eq('active', true)
+    .order('name');
+
+  if (error) { console.error('Collections error:', error); return; }
+  collections = data || [];
+
+  const select = document.getElementById('newCollection');
+  select.innerHTML = '<option value="">— none —</option>';
+  collections.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    select.appendChild(opt);
+  });
+}
+
+function switchTab(tab, btn) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  btn.classList.add('active');
+}
+
+function openAddModal() {
+  if (currentTab === 'pieces') openModal('addPieceModal');
+  else openModal('addTreatmentModal');
+}
+
+async function loadPieces() {
+  const { data, error } = await db
+    .from('pieces')
+    .select(`*, piece_photos(*), collections(name)`)
+    .eq('active', true)
+    .order('wall_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false });
+
+  if (error) { console.error(error); return; }
+  pieces = data || [];
+  renderPieces();
+}
+
+function renderPieces() {
+  const grid = document.getElementById('piecesGrid');
+  if (!pieces.length) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">
+      <h2>No pieces yet</h2>
+      <p>Click + Add to start building your collection</p>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = pieces.map((p, i) => {
+    const photos = p.piece_photos || [];
+    const cover = photos.find(ph => ph.public_url) || photos[0];
+    const photoCount = photos.length;
+
+    if (cover && cover.public_url) {
+      return `<div class="card" onclick="openLightbox(${i})">
+        <img src="${cover.public_url}" alt="${p.name}" loading="lazy">
+        <div class="card-overlay">
+          <div class="card-name">${p.name}</div>
+          <div class="card-meta">${p.status || '—'} · ${photoCount} photo${photoCount !== 1 ? 's' : ''}</div>
+        </div>
+      </div>`;
+    } else {
+      return `<div class="card" onclick="openLightbox(${i})">
+        <div class="card-no-photo">
+          <span>No photo</span>
+          <span style="font-size:24px;color:var(--border)">+</span>
+        </div>
+        <div class="card-overlay" style="opacity:1;background:linear-gradient(to top,rgba(14,13,11,0.7) 0%,transparent 60%)">
+          <div class="card-name">${p.name}</div>
+          <div class="card-meta">${p.status || '—'}</div>
+        </div>
+      </div>`;
+    }
+  }).join('');
+}
+
+function openLightbox(i) {
+  currentPiece = pieces[i];
+  currentPhotos = currentPiece.piece_photos || [];
+  currentPhotoIndex = 0;
+  updateLightbox();
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function updateLightbox() {
+  const p = currentPiece;
+  document.getElementById('lbTitle').textContent = p.name;
+  document.getElementById('lbStage').textContent = p.status || '';
+  // FIX: read collection name from joined collections table
+  document.getElementById('lbCollection').textContent = p.collections?.name || '—';
+  document.getElementById('lbDimensions').textContent = p.dimensions || '—';
+  document.getElementById('lbEdition').textContent = p.edition_size ? `${p.edition_size} AP` : '—';
+  document.getElementById('lbNotes').textContent = p.notes || '—';
+
+  const img = document.getElementById('lbMainImg');
+  if (currentPhotos.length && currentPhotos[currentPhotoIndex]?.public_url) {
+    img.src = currentPhotos[currentPhotoIndex].public_url;
+    img.style.display = '';
+  } else {
+    img.style.display = 'none';
+  }
+
+  const fs = document.getElementById('lbFilmstrip');
+  fs.innerHTML = currentPhotos.map((ph, i) =>
+    `<img class="filmstrip-thumb ${i === currentPhotoIndex ? 'active' : ''}"
+      src="${ph.public_url}" onclick="lbSetPhoto(${i})" loading="lazy">`
+  ).join('');
+}
+
+function lbNav(dir) {
+  if (!currentPhotos.length) return;
+  currentPhotoIndex = (currentPhotoIndex + dir + currentPhotos.length) % currentPhotos.length;
+  updateLightbox();
+}
+
+function lbSetPhoto(i) { currentPhotoIndex = i; updateLightbox(); }
+function triggerLbUpload() { document.getElementById('lbFileInput').click(); }
+
+async function uploadPiecePhotos(input) {
+  const files = Array.from(input.files);
+  if (!files.length || !currentPiece) return;
+  setStatus('Uploading…');
+
+  for (const file of files) {
+    const ext = file.name.split('.').pop();
+    const path = `pieces/${currentPiece.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    const { error: upErr } = await db.storage.from('piece-photos').upload(path, file);
+    if (upErr) { toast('Upload failed: ' + upErr.message); continue; }
+
+    const { data: urlData } = db.storage.from('piece-photos').getPublicUrl(path);
+
+    const { error: dbErr } = await db.from('piece_photos').insert({
+      piece_id: currentPiece.id,
+      storage_path: path,
+      public_url: urlData.publicUrl,
+      sort_order: currentPhotos.length
+    });
+    if (dbErr) { toast('DB error: ' + dbErr.message); continue; }
+  }
+
+  input.value = '';
+  await loadPieces();
+  currentPiece = pieces.find(p => p.id === currentPiece.id);
+  currentPhotos = currentPiece?.piece_photos || [];
+  currentPhotoIndex = currentPhotos.length - 1;
+  updateLightbox();
+  setStatus(`${pieces.length} pieces · ${treatments.length} tests`);
+  toast('Photo uploaded');
+}
+
+async function deleteLbPhoto() {
+  if (!currentPhotos.length) return;
+  const photo = currentPhotos[currentPhotoIndex];
+  if (!confirm('Delete this photo?')) return;
+
+  await db.storage.from('piece-photos').remove([photo.storage_path]);
+  await db.from('piece_photos').delete().eq('id', photo.id);
+
+  await loadPieces();
+  currentPiece = pieces.find(p => p.id === currentPiece.id);
+  currentPhotos = currentPiece?.piece_photos || [];
+  currentPhotoIndex = Math.max(0, currentPhotoIndex - 1);
+  updateLightbox();
+  toast('Photo deleted');
+}
+
+// ── FIX: save collection_id (uuid) not collection (text) ──
+async function savePiece() {
+  const name = document.getElementById('newName').value.trim();
+  if (!name) { toast('Name is required'); return; }
+
+  const btn = document.getElementById('savePieceBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  const payload = {
+    name,
+    status: document.getElementById('newStatus').value,
+    collection_id: document.getElementById('newCollection').value || null,
+    dimensions: document.getElementById('newDimensions').value.trim() || null,
+    edition_size: parseInt(document.getElementById('newEdition').value) || null,
+    pose_count: parseInt(document.getElementById('newPoseCount').value) || null,
+    wall_order: parseInt(document.getElementById('newWallOrder').value) || null,
+    notes: document.getElementById('newNotes').value.trim() || null,
+  };
+
+  const { error } = await db.from('pieces').insert(payload);
+  btn.disabled = false; btn.textContent = 'Save Piece';
+
+  if (error) { toast('Error: ' + error.message); return; }
+
+  closeModal('addPieceModal');
+  clearPieceForm();
+  await loadPieces();
+  setStatus(`${pieces.length} pieces · ${treatments.length} tests`);
+  toast('Piece added');
+}
+
+function clearPieceForm() {
+  ['newName','newDimensions','newEdition','newPoseCount','newWallOrder','newNotes']
+    .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('newStatus').selectedIndex = 0;
+  document.getElementById('newCollection').selectedIndex = 0;
+}
+
+async function loadTreatments() {
+  const { data, error } = await db
+    .from('treatment_tests')
+    .select(`*, treatment_photos(*)`)
+    .order('created_at', { ascending: false });
+
+  if (error) { console.error(error); return; }
+  treatments = data || [];
+  renderTreatments();
+}
+
+function renderTreatments() {
+  const grid = document.getElementById('treatmentsGrid');
+  if (!treatments.length) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">
+      <h2>No tests yet</h2>
+      <p>Click + Add to log your first treatment test</p>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = treatments.map((t, i) => {
+    const photos = t.treatment_photos || [];
+    const cover = photos[0];
+    const stars = '★'.repeat(t.rating || 0) + '☆'.repeat(5 - (t.rating || 0));
+    const starHtml = stars.split('').map((s,j) =>
+      `<span class="${j < (t.rating||0) ? 'filled' : ''}">${s}</span>`
+    ).join('');
+
+    return `<div class="treatment-card" onclick="openTreatmentLightbox(${i})">
+      ${cover?.public_url
+        ? `<img class="treatment-card-img" src="${cover.public_url}" alt="${t.name}" loading="lazy">`
+        : `<div class="treatment-card-img placeholder">◎</div>`
+      }
+      <div class="treatment-card-body">
+        <div class="treatment-name">${t.name}</div>
+        <div class="treatment-material">${t.material || '—'}</div>
+        <div class="rating">${starHtml}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openTreatmentLightbox(i) {
+  currentTreatment = treatments[i];
+  currentTreatmentPhotos = currentTreatment.treatment_photos || [];
+  currentTlbIndex = 0;
+  updateTreatmentLightbox();
+  openModal('treatmentLightbox');
+}
+
+function updateTreatmentLightbox() {
+  const t = currentTreatment;
+  document.getElementById('tlbName').textContent = t.name;
+  document.getElementById('tlbMaterial').textContent = t.material || '';
+  document.getElementById('tlbProcess').textContent = t.process || '—';
+  document.getElementById('tlbResult').textContent = t.result || '—';
+  document.getElementById('tlbNotes').textContent = t.notes || '—';
+
+  const img = document.getElementById('tlbMainImg');
+  const noPhoto = document.getElementById('tlbNoPhoto');
+  if (currentTreatmentPhotos.length && currentTreatmentPhotos[currentTlbIndex]?.public_url) {
+    img.src = currentTreatmentPhotos[currentTlbIndex].public_url;
+    img.style.display = '';
+    noPhoto.style.display = 'none';
+  } else {
+    img.style.display = 'none';
+    noPhoto.style.display = '';
+  }
+
+  const fs = document.getElementById('tlbFilmstrip');
+  fs.innerHTML = currentTreatmentPhotos.map((ph, i) =>
+    `<img class="filmstrip-thumb ${i === currentTlbIndex ? 'active' : ''}"
+      src="${ph.public_url}" onclick="tlbSetPhoto(${i})" loading="lazy" style="width:56px;height:56px;object-fit:cover">`
+  ).join('');
+}
+
+function tlbSetPhoto(i) { currentTlbIndex = i; updateTreatmentLightbox(); }
+function triggerTlbUpload() { document.getElementById('tlbFileInput').click(); }
+
+async function uploadTreatmentPhotos(input) {
+  const files = Array.from(input.files);
+  if (!files.length || !currentTreatment) return;
+
+  for (const file of files) {
+    const ext = file.name.split('.').pop();
+    const path = `treatments/${currentTreatment.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    const { error: upErr } = await db.storage.from('treatment-photos').upload(path, file);
+    if (upErr) { toast('Upload failed: ' + upErr.message); continue; }
+
+    const { data: urlData } = db.storage.from('treatment-photos').getPublicUrl(path);
+
+    await db.from('treatment_photos').insert({
+      test_id: currentTreatment.id,
+      storage_path: path,
+      public_url: urlData.publicUrl,
+      sort_order: currentTreatmentPhotos.length
+    });
+  }
+
+  input.value = '';
+  await loadTreatments();
+  currentTreatment = treatments.find(t => t.id === currentTreatment.id);
+  currentTreatmentPhotos = currentTreatment?.treatment_photos || [];
+  currentTlbIndex = currentTreatmentPhotos.length - 1;
+  updateTreatmentLightbox();
+  toast('Photo uploaded');
+}
+
+async function saveTreatment() {
+  const name = document.getElementById('tName').value.trim();
+  if (!name) { toast('Name is required'); return; }
+
+  const btn = document.getElementById('saveTreatmentBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  const { error } = await db.from('treatment_tests').insert({
+    name,
+    material: document.getElementById('tMaterial').value.trim() || null,
+    rating: parseInt(document.getElementById('tRating').value) || null,
+    process: document.getElementById('tProcess').value.trim() || null,
+    result: document.getElementById('tResult').value.trim() || null,
+    notes: document.getElementById('tNotes').value.trim() || null,
+  });
+
+  btn.disabled = false; btn.textContent = 'Save Test';
+  if (error) { toast('Error: ' + error.message); return; }
+
+  closeModal('addTreatmentModal');
+  ['tName','tMaterial','tRating','tProcess','tResult','tNotes'].forEach(id => document.getElementById(id).value = '');
+  await loadTreatments();
+  setStatus(`${pieces.length} pieces · ${treatments.length} tests`);
+  toast('Test added');
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+document.querySelectorAll('.modal-backdrop').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); });
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeLightbox();
+    ['addPieceModal','addTreatmentModal','treatmentLightbox'].forEach(closeModal);
+  }
+  if (document.getElementById('lightbox').classList.contains('open')) {
+    if (e.key === 'ArrowLeft') lbNav(-1);
+    if (e.key === 'ArrowRight') lbNav(1);
+  }
+});
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+init();
+</script>
+</body>
+</html>
